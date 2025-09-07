@@ -1,11 +1,10 @@
 # EchoGIS_app.py
 import streamlit as st
 import pandas as pd
-import pydeck as pdk
-import time
 import numpy as np
+import time
 from datetime import datetime
-import base64
+import pydeck as pdk  # For custom map
 
 # ---------------------------
 # Page configuration
@@ -15,22 +14,22 @@ st.set_page_config(page_title="EchoGIS - Prototype", layout="wide")
 # ---------------------------
 # Custom Navbar (WII style)
 # ---------------------------
-def navbar():st.markdown(
-    """
-    <div style="background-color:#228B22;padding:10px;border-radius:5px;
-                display:flex;align-items:center;justify-content:space-between;">
-        <div style="display:flex;align-items:center;gap:10px;">
-            <img src="https://wii.gov.in/images/logo.png" width="250">
-            <h2 style="color:white;margin:0;"></h2>
+def navbar():
+    st.markdown(
+        """
+        <div style="background-color:#228B22;padding:10px;border-radius:5px;
+                    display:flex;align-items:center;justify-content:space-between;">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <img src="https://wii.gov.in/images/logo.png" width="250">
+            </div>
+            <h4 style="color:white;margin:0;">🌊 EchoGIS</h4>
         </div>
-        <h4 style="color:white;margin:0;">🌊 EchoGIS</h4>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+        """,
+        unsafe_allow_html=True
+    )
 navbar()
 
-st.title(" Prototype to protect Ganga dolphin")
+st.title("Prototype to Protect Ganga Dolphin")
 
 # ---------------------------
 # Password protection
@@ -59,9 +58,6 @@ if not st.session_state.authenticated:
 # Sidebar controls
 # ---------------------------
 st.sidebar.title("⚙️ EchoGIS Controls")
-st.sidebar.markdown("Adjust prototype demo parameters here.")
-
-# Sentinel NDWI mock toggle
 show_ndwi = st.sidebar.checkbox("🌍 Show Sentinel-2 NDWI Layer (demo)", value=False)
 
 # ---------------------------
@@ -110,14 +106,13 @@ else:
 df_shown = df[df["timestamp"] <= pd.to_datetime(st.session_state.current_time)].copy()
 
 # ---------------------------
-# Danger polygon (near Bhagalpur demo zone)
+# Simple Danger Check
 # ---------------------------
 danger_polygon = [
     [87.010, 25.285],
     [87.040, 25.285],
     [87.040, 25.305],
-    [87.010, 25.305],
-    [87.010, 25.285]
+    [87.010, 25.305]
 ]
 
 def point_in_poly(x, y, poly):
@@ -139,18 +134,15 @@ df_shown["status"] = df_shown.apply(
     axis=1
 )
 
-color_map = {"Safe": [0, 128, 255], "Danger": [255, 0, 0]}
-df_shown["color"] = df_shown["status"].map(lambda s: color_map.get(s, [0, 0, 0]))
-
 # ---------------------------
-# Pydeck map layers
+# Dolphin Map with Clear Scatter
 # ---------------------------
 layers = []
 
-# NDWI Heatmap Layer (Mock Sentinel-2)
+# NDWI mock heatmap
 if show_ndwi:
     ndwi_points = []
-    for i in range(200):
+    for i in range(300):
         ndwi_points.append({
             "longitude": df["longitude"].mean() + np.random.uniform(-0.05, 0.05),
             "latitude": df["latitude"].mean() + np.random.uniform(-0.05, 0.05),
@@ -162,47 +154,36 @@ if show_ndwi:
         get_position='[longitude, latitude]',
         get_weight="value",
         radiusPixels=80,
-        opacity=0.4
+        opacity=0.35
     )
     layers.append(ndwi_layer)
 
-# Dolphin layer
+# Dolphin scatterplot
+color_map = {"Safe": [0, 0, 255], "Danger": [255, 0, 0]}  # Blue & Red
+df_shown["color"] = df_shown["status"].map(color_map)
+
 dolphin_layer = pdk.Layer(
     "ScatterplotLayer",
     data=df_shown,
     get_position='[longitude, latitude]',
     get_color="color",
-    get_radius=60,
-    pickable=True
+    get_radius=80,
+    pickable=True,
 )
 layers.append(dolphin_layer)
 
-# Danger polygon
-polygon_layer = pdk.Layer(
-    "PolygonLayer",
-    data=[{"coordinates": [[c[::-1] for c in danger_polygon]]}],
-    get_polygon="coordinates",
-    stroked=True,
-    filled=False,
-    get_line_color=[255, 0, 0],
-    line_width_min_pixels=2
-)
-layers.append(polygon_layer)
+# ---------------------------
+# Easier Map Visualization (simple map)
+# ---------------------------
+st.subheader("🗺 Dolphin Tracking Map")
 
-# View settings
-view_state = pdk.ViewState(
-    longitude=df["longitude"].mean(),
-    latitude=df["latitude"].mean(),
-    zoom=12,
-    pitch=0
-)
+map_df = df_shown[["latitude", "longitude", "status"]].copy()
+map_df["color"] = map_df["status"].map({"Safe": [0, 0, 255], "Danger": [255, 0, 0]})
 
-deck = pdk.Deck(
-    layers=layers,
-    initial_view_state=view_state,
-    map_style="mapbox://styles/mapbox/light-v10"
-)
-st.pydeck_chart(deck)
+st.map(map_df, latitude="latitude", longitude="longitude")
+
+if show_ndwi:
+    st.info("🌍 Sentinel-2 NDWI demo ON (showing mock water index heatmap).")
 
 # ---------------------------
 # Sidebar summary
@@ -218,10 +199,7 @@ if counts.get("Danger", 0) > 0:
 # QGIS Skills Showcase
 # ---------------------------
 st.subheader("🛰️ QGIS Integration Demo")
-st.markdown("Upload a **Shapefile (.shp)** or **GeoTIFF (.tif)** exported from QGIS to visualize here:")
-
-uploaded_file = st.file_uploader("Upload GIS Layer", type=["shp", "tif"])
-
+uploaded_file = st.file_uploader("Upload GIS Layer (Shapefile or GeoTIFF)", type=["shp", "tif"])
 if uploaded_file:
     st.success(f"✅ Uploaded: {uploaded_file.name}")
     st.markdown("*(Demo placeholder — in real system this would overlay your QGIS data on the map)*")
@@ -233,13 +211,57 @@ st.subheader("📊 Recent Dolphin Positions")
 st.dataframe(df_shown.sort_values("timestamp", ascending=False).head(20))
 
 # ---------------------------
+# Geofencing & Scatter Graph
+# ---------------------------
+st.subheader("🗺️ Scatter Graph with Geofence Alerts")
+
+# Danger polygon (filled transparent red if danger exists)
+fill_color = [255, 0, 0, 80] if counts.get("Danger", 0) > 0 else [255, 0, 0, 0]
+
+polygon_layer = pdk.Layer(
+    "PolygonLayer",
+    data=[{"coordinates": [[c[::-1] for c in danger_polygon]]}],
+    get_polygon="coordinates",
+    stroked=True,
+    filled=True,
+    get_fill_color=fill_color,
+    get_line_color=[255, 0, 0],
+    line_width_min_pixels=3
+)
+layers.append(polygon_layer)
+
+# Map view
+view_state = pdk.ViewState(
+    longitude=df["longitude"].mean(),
+    latitude=df["latitude"].mean(),
+    zoom=12,
+    pitch=0
+)
+
+deck = pdk.Deck(
+    layers=layers,
+    initial_view_state=view_state,
+    map_style="mapbox://styles/mapbox/satellite-streets-v11",
+    tooltip={"text": "🐬 {status}\n📍 ({latitude}, {longitude})"}
+)
+st.pydeck_chart(deck)
+
+# ---------------------------
 # Footer notes
 # ---------------------------
 st.markdown("""
 ---
+### Legend
+🔵 Blue = Safe dolphin  
+🔴 Red = Danger dolphin  
+🟥 Transparent Red Polygon = High-risk canal/area (Geofence Alert)  
+🌍 Green Heatmap = Sentinel-2 NDWI demo (mock water index)
+
+---
 ### Notes
-- This is a demo with **simulated dolphin data**.
-- ✅ NDWI layer simulates **Sentinel-2 water index** (QGIS-ready).
-- 🛰️ QGIS upload shows integration with **field GIS workflows**.
-- Password protection is enabled for ethical safety.
+- Scatterplot is interactive with tooltips for each dolphin.
+- ✅ NDWI layer simulates **Sentinel-2 water index**.
+- 🛰️ QGIS upload highlights GIS workflow integration.
+- 🚨 Geofence alert highlights danger zones dynamically.
+- Password protection ensures ethical safety.
 """)
